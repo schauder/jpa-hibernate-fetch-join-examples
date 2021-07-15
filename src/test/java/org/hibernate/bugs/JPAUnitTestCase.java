@@ -1,6 +1,7 @@
 package org.hibernate.bugs;
 
 import org.assertj.core.api.Assertions;
+import org.hibernate.Hibernate;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,7 +35,8 @@ public class JPAUnitTestCase {
 	}
 
 	/**
-	 * A condition on a join limits the resulting parent entity, but not their referenced entities
+	 * A condition on a join limits the resulting parent entity, but not their referenced entities.
+	 * Since the children relation is lazy and no fetch join was specified the children property is not initialized.
 	 */
 	@Test
 	public void selectJoinWithSimpleCondition() {
@@ -47,6 +49,7 @@ public class JPAUnitTestCase {
 			final Parent parent = query.getSingleResult();
 
 			assertThat(parent).isNotNull();
+			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
 			assertThat(parent.children).hasSize(3);
 			return  null;
 		});
@@ -57,6 +60,7 @@ public class JPAUnitTestCase {
 	 * This not a fetch join as described in the specification.
 	 *
 	 * It does limit the returned parent, but also limits the contained children.
+	 * Since it is a fetch join the children list is initialized.
 	 */
 	@Test
 	public void selectJoinFetchWithSimpleCondition() {
@@ -70,6 +74,7 @@ public class JPAUnitTestCase {
 			final Parent parent = query.getSingleResult();
 
 			assertThat(parent).isNotNull();
+			assertThat(Hibernate.isInitialized(parent.children)).isTrue();
 			assertThat(parent.children).hasSize(1);
 			return  null;
 		});
