@@ -1,5 +1,6 @@
 package org.hibernate.bugs;
 
+import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,7 +37,7 @@ public class JPAUnitTestCase {
 	 * A condition on a join limits the resulting parent entity, but not their referenced entities
 	 */
 	@Test
-	public void selectWithSimpleCondition() {
+	public void selectJoinWithSimpleCondition() {
 		inTransaction(em -> {
 
 			final TypedQuery<Parent> query = em.createQuery(
@@ -50,6 +51,28 @@ public class JPAUnitTestCase {
 			return  null;
 		});
 
+	}
+
+	/**
+	 * This not a fetch join as described in the specification.
+	 *
+	 * It does limit the returned parent, but also limits the contained children.
+	 */
+	@Test
+	public void selectJoinFetchWithSimpleCondition() {
+
+		inTransaction(em -> {
+
+			final TypedQuery<Parent> query = em.createQuery(
+					"SELECT p FROM Parent p JOIN FETCH p.children c WHERE c.name = 'Baby Smurf'",
+					Parent.class
+			);
+			final Parent parent = query.getSingleResult();
+
+			assertThat(parent).isNotNull();
+			assertThat(parent.children).hasSize(1);
+			return  null;
+		});
 	}
 
 	private void createSmurfs() {
