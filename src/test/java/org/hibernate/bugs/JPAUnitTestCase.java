@@ -1,26 +1,22 @@
 package org.hibernate.bugs;
 
-import org.assertj.core.api.Assertions;
 import org.hibernate.Hibernate;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
-import javax.persistence.Query;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Fetch;
 import javax.persistence.criteria.Join;
 import javax.persistence.criteria.JoinType;
 import javax.persistence.criteria.Root;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -43,11 +39,13 @@ public class JPAUnitTestCase {
 	}
 
 	/**
-	 * A condition on a join limits the resulting parent entity, but not their referenced entities.
-	 * Since the children relation is lazy and no fetch join was specified the children property is not initialized.
+	 * Simple Join does not fetch joined attribute.
+	 * Children are complete.
+	 * <p>
+	 * JPQL.
 	 */
 	@Test
-	public void selectJoinWithSimpleCondition() {
+	public void simpleJoinDoesNotFetchAttributeJpql() {
 		inTransaction(em -> {
 
 			final TypedQuery<Parent> query = em.createQuery(
@@ -64,11 +62,13 @@ public class JPAUnitTestCase {
 	}
 
 	/**
-	 * A condition on a join limits the resulting parent entity, but not their referenced entities.
-	 * Since the children relation is lazy and no fetch join was specified the children property is not initialized.
+	 * Simple Join does not fetch joined attribute.
+	 * Children are complete.
+	 * <p>
+	 * Criteria API.
 	 */
 	@Test
-	public void selectJoinWithSimpleConditionCriteria() {
+	public void selectJoinWithSimpleConditionCriteriaApi() {
 		inTransaction(em -> {
 
 			final CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -88,12 +88,14 @@ public class JPAUnitTestCase {
 
 	/**
 	 * This not a fetch join as described in the specification.
-	 *
+	 * <p>
 	 * It does limit the returned parent, but also limits the contained children.
 	 * Since it is a fetch join the children list is initialized.
+	 * <p>
+	 * By this usage a FETCH JOIN is a JOIN.
 	 */
 	@Test
-	public void selectJoinFetchWithSimpleCondition() {
+	public void fetchJoinUsedInCoditionLimitsResultsJpql() {
 
 		inTransaction(em -> {
 
@@ -110,12 +112,15 @@ public class JPAUnitTestCase {
 	}
 
 	/**
-	 * This not a fetch join as described in the specification.
-	 *
-	 * And it is not expressable in Criteria API
+	 * One actually can use a fetch join as a join in the Criteria API if one casts the {@link javax.persistence.criteria.Fetch} to {@link Join}.
+	 * <p>
+	 * This is highly brittle since it depends on implementation details.
+	 * <p>
+	 * It does limit the returned parent, but also limits the contained children.
+	 * Since it is a fetch join the children list is initialized.
 	 */
 	@Test
-	public void selectJoinFetchWithSimpleConditionCriteria() {
+	public void fetchJoinUsedInCoditionHackedLimitsResultsCriteriaApi() {
 
 		inTransaction(em -> {
 
@@ -138,10 +143,35 @@ public class JPAUnitTestCase {
 	}
 
 	/**
+	 * One cannot use a path expression to silently reuse a fetch with Criteria API. The test fails when executed.
+	 */
+	@Test
+	@Ignore
+	public void fetchJoinUsedInCoditionFailsCriterApi() {
+
+		inTransaction(em -> {
+
+			final CriteriaBuilder cb = em.getCriteriaBuilder();
+			final CriteriaQuery<Parent> query = cb.createQuery(Parent.class);
+			final Root<Parent> root = query.from(Parent.class);
+			root.fetch("children");
+			query.where(cb.equal(root.get("children").get("name"), "Baby Smurf"));
+
+			final Parent parent = em.createQuery(query).getSingleResult();
+
+			assertThat(parent).isNotNull();
+			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
+			assertThat(Hibernate.isInitialized(parent.favoriteChild)).isTrue();
+			assertThat(parent.children).hasSize(3);
+		});
+	}
+
+	/**
+	 * This is what the specification suggests to use if one wants to use a joined attribute in a condition AND wants to fetch that join as well:
 	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
 	 */
 	@Test
-	public void selectJoinFetchAndJoinWithSimpleConditionGet() {
+	public void joinFetchPlusJoinWithConditionFetchesAllChildrenAndFiltersParentByChildrenJpql() {
 
 		inTransaction(em -> {
 
@@ -157,11 +187,15 @@ public class JPAUnitTestCase {
 			assertThat(parent.children).hasSize(3);
 		});
 	}
+
 	/**
+	 * This is what the specification suggests to use if one wants to use a joined attribute in a condition AND wants to fetch that join as well:
 	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
+	 * <p>
+	 * But when queried with {@code getResultList()} duplicates are returned.
 	 */
 	@Test
-	public void selectJoinFetchAndJoinWithSimpleConditionResultList() {
+	public void joinFetchPlusJoinWithConditionFetchesAllChildrenAndFiltersParentByChildrenResultListJpql() {
 
 		inTransaction(em -> {
 
@@ -183,10 +217,11 @@ public class JPAUnitTestCase {
 	}
 
 	/**
+	 * This is what the specification suggests to use if one wants to use a joined attribute in a condition AND wants to fetch that join as well:
 	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
 	 */
 	@Test
-	public void selectJoinFetchAndJoinWithSimpleConditionCriteria() {
+	public void joinFetchPlusJoinWithConditionFetchesAllChildrenAndFiltersParentByChildrenJpqlCriteriaApi() {
 
 		inTransaction(em -> {
 
@@ -206,33 +241,10 @@ public class JPAUnitTestCase {
 	}
 
 	/**
-	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
+	 * For * to One relations reusing a Fetch Join does not alter the result in a surprising way.
 	 */
 	@Test
-	public void selectReusingFetchWithPathExpressionWithSimpleConditionCriteria() {
-
-		inTransaction(em -> {
-
-			final CriteriaBuilder cb = em.getCriteriaBuilder();
-			final CriteriaQuery<Parent> query = cb.createQuery(Parent.class);
-			final Root<Parent> root = query.from(Parent.class);
-//			root.fetch("children");
-			query.where(cb.equal(root.get("children").get("name"), "Baby Smurf"));
-
-			final Parent parent = em.createQuery(query).getSingleResult();
-
-			assertThat(parent).isNotNull();
-			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
-			assertThat(Hibernate.isInitialized(parent.favoriteChild)).isTrue();
-			assertThat(parent.children).hasSize(3);
-		});
-	}
-
-	/**
-	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
-	 */
-	@Test
-	public void selectReusingFetchWithPathExpressionWithSimpleConditionCriteriaSingle() {
+	public void fetchJoinReusedByPathExpressionForOneToOneJpqlMatch() {
 
 		inTransaction(em -> {
 
@@ -251,11 +263,12 @@ public class JPAUnitTestCase {
 		});
 	}
 
+
 	/**
-	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
+	 * For * to One relations reusing a Fetch Join does not alter the result in a surprising way.
 	 */
 	@Test
-	public void selectReusingLeftOuterFetchWithPathExpressionWithSimpleConditionCriteria() {
+	public void fetchJoinReusedByPathExpressionForOneToOneJpqlNoMatch() {
 
 		inTransaction(em -> {
 
