@@ -10,8 +10,7 @@ and their effects on the select result.
     > @throws NonUniqueResultException if more than one result
 * A fetch join might implicitely be referenced by a path expression in the WHERE-clause in JPQL, but not in the Criteria API.
     If done so, the number of children returned is limited by the condition. The behaviour is undefined by the Specification but the possibility to do so seems in contradiction to the specification which explicitely mentions
-    > A fetch join has the same join semantics as the corresponding inner or outer join, except that *the related objects specified on the right-hand side of the join operation are not* returned in the query result or *otherwise referenced in the query*.
-    _Section 4.4.5.3 of the JPA Specification_
+    >  It is not permitted to specify an identification variable for the objects referenced by the right side of the FETCH JOIN clause, and hence references to the implicitly fetched entities or elements cannot appear elsewhere in the query.
 * A fetch join actually can be reused in the Criteria API by Hibernate once one realises that a `Fetch` implementation of Hibernate may be cast to a `Join` and then used as such.
 
 All the tests are in the single test class:
