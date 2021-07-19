@@ -15,3 +15,5 @@ and their effects on the select result.
 
 All the tests are in the single test class:
 https://github.com/schauder/jpa-hibernate-fetch-join-examples/blob/main/src/test/java/org/hibernate/bugs/JPAUnitTestCase.java
+
+I created an issue with the JPA Spec in order to get clarification https://github.com/eclipse-ee4j/jpa-api/issues/327
