@@ -18,6 +18,7 @@ import javax.persistence.criteria.Join;
 import javax.persistence.criteria.JoinType;
 import javax.persistence.criteria.Root;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -58,7 +59,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
 			assertThat(parent.children).hasSize(3);
-			return  null;
 		});
 
 	}
@@ -82,7 +82,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
 			assertThat(parent.children).hasSize(3);
-			return  null;
 		});
 
 	}
@@ -107,7 +106,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isTrue();
 			assertThat(parent.children).hasSize(1);
-			return  null;
 		});
 	}
 
@@ -136,7 +134,6 @@ public class JPAUnitTestCase {
 
 			assertThat(root.getJoins()).hasSize(0); // <--- Look Ma, no joins
 			assertThat(root.getFetches()).hasSize(1);
-			return  null;
 		});
 	}
 
@@ -158,7 +155,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isTrue();
 			assertThat(parent.children).hasSize(3);
-			return null;
 		});
 	}
 	/**
@@ -183,7 +179,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isTrue();
 			assertThat(parent.children).hasSize(3);
-			return null;
 		});
 	}
 
@@ -207,7 +202,6 @@ public class JPAUnitTestCase {
 			assertThat(parent).isNotNull();
 			assertThat(Hibernate.isInitialized(parent.children)).isTrue();
 			assertThat(parent.children).hasSize(3);
-			return null;
 		});
 	}
 
@@ -216,6 +210,29 @@ public class JPAUnitTestCase {
 	 */
 	@Test
 	public void selectReusingFetchWithPathExpressionWithSimpleConditionCriteria() {
+
+		inTransaction(em -> {
+
+			final CriteriaBuilder cb = em.getCriteriaBuilder();
+			final CriteriaQuery<Parent> query = cb.createQuery(Parent.class);
+			final Root<Parent> root = query.from(Parent.class);
+//			root.fetch("children");
+			query.where(cb.equal(root.get("children").get("name"), "Baby Smurf"));
+
+			final Parent parent = em.createQuery(query).getSingleResult();
+
+			assertThat(parent).isNotNull();
+			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
+			assertThat(Hibernate.isInitialized(parent.favoriteChild)).isTrue();
+			assertThat(parent.children).hasSize(3);
+		});
+	}
+
+	/**
+	 * Join fetch PLUS a JOIN initializes the collection and loads the children.
+	 */
+	@Test
+	public void selectReusingFetchWithPathExpressionWithSimpleConditionCriteriaSingle() {
 
 		inTransaction(em -> {
 
@@ -231,7 +248,6 @@ public class JPAUnitTestCase {
 			assertThat(Hibernate.isInitialized(parent.children)).isFalse();
 			assertThat(Hibernate.isInitialized(parent.favoriteChild)).isTrue();
 			assertThat(parent.children).hasSize(3);
-			return null;
 		});
 	}
 
@@ -252,11 +268,11 @@ public class JPAUnitTestCase {
 			final List<Parent> parents = em.createQuery(query).getResultList();
 
 			assertThat(parents).isEmpty();
-			return null;
 		});
 	}
 
 	private void createSmurfs() {
+
 		inTransaction(em -> {
 
 			final Parent p = new Parent();
@@ -274,21 +290,21 @@ public class JPAUnitTestCase {
 			final Parent l = new Parent();
 			l.name = "Lonely Smurf";
 			em.persist(l);
-
-			return p;
 		});
 	}
 
-	private <T> T inTransaction(Function<EntityManager, T> command) {
+	private <T> void inTransaction(Consumer<EntityManager> command) {
+
 		EntityManager entityManager = entityManagerFactory.createEntityManager();
 		entityManager.getTransaction().begin();
 
-		T result = command.apply(entityManager);
+		try {
+			command.accept(entityManager);
+		} finally {
+			entityManager.getTransaction().commit();
+			entityManager.close();
+		}
 
-		entityManager.getTransaction().commit();
-		entityManager.close();
-
-		return result;
 	}
 
 	// select with fetch JPQL
